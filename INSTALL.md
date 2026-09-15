@@ -2,25 +2,25 @@
 
 ## Claude Code / 本地 CLI
 
-把整个目录放到技能目录下，目录名必须保持 `social-keyword-selection`：
+把整个目录放到技能目录下，目录名必须保持 `product-selection`：
 
 ```bash
 # 项目级
 mkdir -p .claude/skills
-git clone https://github.com/lingling1989r/AuraBaba_SocialKeyword_Skill.git \
-  .claude/skills/social-keyword-selection
+git clone https://github.com/lingling1989r/AuraBaba_ProductSelection_Skill.git \
+  .claude/skills/product-selection
 
 # 或个人级
-git clone https://github.com/lingling1989r/AuraBaba_SocialKeyword_Skill.git \
-  ~/.claude/skills/social-keyword-selection
+git clone https://github.com/lingling1989r/AuraBaba_ProductSelection_Skill.git \
+  ~/.claude/skills/product-selection
 ```
 
-放好后重启会话，`social-keyword-selection` 会在可用技能列表里出现。
+放好后重启会话，`product-selection` 会在可用技能列表里出现。
 
 ### 配置密钥
 
 ```bash
-cd .claude/skills/social-keyword-selection
+cd .claude/skills/product-selection
 cp config.local.example.json config.local.json
 # 然后编辑 config.local.json，把三个数据源的 key 换成你自己的
 ```
@@ -43,5 +43,5 @@ python3 scripts/mcp_call.py check        # 自检数据源连通性
 这个技能已经发布在工作区里，直接在会话里用即可，不需要再装一遍：
 
 ```bash
-aura skill list | grep social-keyword-selection
+aura skill list | grep product-selection
 ```

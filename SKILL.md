@@ -1,7 +1,8 @@
 ---
-name: social-keyword-selection
+name: product-selection
 description: |
-  社媒 × 关键词结合的跨境选品方法论，落成一条带分阶段结果验证的可执行流水线。
+  跨境选品方法论：用社媒圈层热词做入口、趋势与痛点做筛选、电商市场做压力测试，
+  落成一条带分阶段结果验证的可执行流水线。
 
   **当以下情况时使用此 Skill**：
   (1) 用户要做「选品」「爆品挖掘」「找新品方向」「选品方法论落地」
@@ -18,7 +19,7 @@ user-invocable: true
 allowed-tools: Bash(aura *), Bash(python3 *), Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
 ---
 
-# 社媒 × 关键词选品流水线
+# 跨境选品流水线
 
 把「不看热销榜、先找圈层」的选品方法论，变成一条**先出数据、再出分析、每阶段有机器可验证 gate** 的流水线。
 
@@ -64,7 +65,7 @@ MCP(一级) → Apify(二级) → WebFetch/WebSearch(三级) → 浏览器操作
 ## 快速开始
 
 ```bash
-SK=.claude/skills/social-keyword-selection        # 或 skill 在本机的实际路径
+SK=.claude/skills/product-selection        # 或 skill 在本机的实际路径
 
 # 0. 连通性自检（必做，先确认哪些源真的活着）
 python3 $SK/scripts/mcp_call.py check

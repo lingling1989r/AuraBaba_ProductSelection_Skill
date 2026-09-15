@@ -393,7 +393,7 @@ def build(run_dir: Path) -> Path:
 </section>
 
 <footer>
-由 social-keyword-selection skill 生成 · 全部原始数据见同目录 <code>selection_data.xlsx</code> ·
+由 product-selection skill 生成 · 全部原始数据见同目录 <code>selection_data.xlsx</code> ·
 阶段中间产物见 run 目录的 <code>raw/</code>、<code>data/</code>、<code>analysis/</code>。
 </footer>
 </div>"""

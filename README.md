@@ -1,8 +1,8 @@
-# social-keyword-selection
+# product-selection
 
-把「不看热销榜、先找圈层」的跨境选品方法论，落成一条**先出数据、再出分析、每阶段有机器可验证 gate** 的可执行流水线。
+跨境选品方法论流水线：**先出数据、再出分析、每阶段有机器可验证 gate**。
 
-关键词在这套方法里是**人群身份词**，不是商品搜索词 —— 起点不是"什么卖得好"，而是"谁正在变热、她们在用什么词说自己"。
+入口不是"什么卖得好"，而是"谁正在变热、她们在用什么词说自己" —— 关键词在这套方法里是**人群身份词**，不是商品搜索词。因为平台卖爆的必然是红海。
 
 ## 五步选品链
 
@@ -48,10 +48,10 @@ MCP(一级) → Apify(二级) → WebFetch/WebSearch(三级) → 浏览器操作
 ## 安装
 
 ```bash
-git clone https://github.com/lingling1989r/AuraBaba_SocialKeyword_Skill.git \
-  .claude/skills/social-keyword-selection
+git clone https://github.com/lingling1989r/AuraBaba_ProductSelection_Skill.git \
+  .claude/skills/product-selection
 
-cd .claude/skills/social-keyword-selection
+cd .claude/skills/product-selection
 cp config.local.example.json config.local.json   # 填入你自己的密钥
 pip3 install openpyxl
 python3 scripts/mcp_call.py check                # 先自检数据源连通性
@@ -60,7 +60,7 @@ python3 scripts/mcp_call.py check                # 先自检数据源连通性
 ## 快速开始
 
 ```bash
-SK=.claude/skills/social-keyword-selection
+SK=.claude/skills/product-selection
 
 python3 $SK/scripts/pipeline.py --run-dir ./selection_run init \
   --topic "北美普拉提女孩圈层 防滑袜选品验证" \

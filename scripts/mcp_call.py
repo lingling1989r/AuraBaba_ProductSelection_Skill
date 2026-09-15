@@ -47,7 +47,7 @@ def load_config(explicit: str | None = None) -> dict:
     candidates += [
         SKILL_ROOT / "config.local.json",
         Path.cwd() / "config.local.json",
-        Path.home() / ".config" / "social-keyword-selection" / "config.local.json",
+        Path.home() / ".config" / "product-selection" / "config.local.json",
     ]
     for p in candidates:
         if p.is_file():
@@ -146,7 +146,7 @@ class McpSession:
             "params": {
                 "protocolVersion": DEFAULT_PROTOCOL,
                 "capabilities": {},
-                "clientInfo": {"name": "aura-social-keyword-selection", "version": "1.0"},
+                "clientInfo": {"name": "aura-product-selection", "version": "1.0"},
             },
         }
         last = None
