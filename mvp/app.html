@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>社媒 × 平台 Trend 选品 MVP</title>
+<style>
+:root{
+  --brand:#1f3864; --brand-2:#2e5395; --ink:#1b1f27; --muted:#6b7280;
+  --line:#e3e6ec; --bg:#f6f7f9; --card:#fff;
+  --ok:#1a7f4b; --ok-bg:#e8f5ee; --warn:#9a6b00; --warn-bg:#fdf4e0;
+  --bad:#b3261e; --bad-bg:#fdeceb; --info:#2258a8; --info-bg:#eaf1fb;
+}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  color:var(--ink);background:var(--bg)}
+header{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;padding:20px 26px}
+header h1{margin:0;font-size:19px;letter-spacing:.4px}
+header p{margin:6px 0 0;font-size:12.5px;opacity:.85}
+.tabs{display:flex;gap:2px;background:var(--brand);padding:0 26px}
+.tabs button{background:transparent;border:0;color:#cfd8ea;padding:11px 18px;font-size:13.5px;
+  cursor:pointer;border-bottom:3px solid transparent}
+.tabs button.on{color:#fff;border-bottom-color:#fff;font-weight:600}
+main{padding:22px 26px 60px;max-width:1280px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+.card > h2{margin:0 0 4px;font-size:15px;color:var(--brand)}
+.card > .sub{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.row > div{display:flex;flex-direction:column;gap:5px}
+label{font-size:12px;color:var(--muted);font-weight:600}
+input,select,textarea{font:13px/1.5 inherit;padding:8px 10px;border:1px solid var(--line);
+  border-radius:7px;background:#fff;color:var(--ink);min-width:0}
+textarea{resize:vertical;min-height:74px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+button.act{background:var(--brand);color:#fff;border:0;border-radius:7px;padding:9px 17px;
+  font-size:13px;font-weight:600;cursor:pointer}
+button.act:hover{background:var(--brand-2)}
+button.act:disabled{opacity:.5;cursor:not-allowed}
+button.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand);border-radius:7px;
+  padding:8px 14px;font-size:12.5px;cursor:pointer}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+  font-size:12px;font-weight:600;border:1px solid transparent}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.info{background:var(--info-bg);color:var(--info)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:var(--brand);color:#fff;text-align:left;padding:8px 9px;font-weight:600;
+  position:sticky;top:0;font-size:12px}
+td{padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.scroll{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:8px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:8px;background:#fcfcfd}
+details summary{cursor:pointer;font-size:12.5px;color:var(--brand);font-weight:600}
+details pre{margin:8px 0 0;overflow:auto;max-height:240px;font-size:11.5px;color:#374151;
+  background:#f4f5f7;padding:10px;border-radius:6px}
+.stages{display:flex;flex-direction:column;gap:6px}
+.stage{display:flex;gap:12px;align-items:center;padding:11px 14px;border:1px solid var(--line);
+  border-radius:9px;background:#fff;cursor:pointer}
+.stage:hover{border-color:var(--brand-2)}
+.stage.on{border-color:var(--brand);box-shadow:0 0 0 2px rgba(31,56,100,.09)}
+.stage .id{font-weight:700;color:var(--brand);min-width:30px;font-size:13px}
+.stage .nm{flex:1;font-size:13px}
+.stage .tag{font-size:11px;color:var(--muted)}
+.two{display:grid;grid-template-columns:minmax(240px,300px) 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:4px 12px;font-size:12.5px;margin:8px 0}
+.kv dt{color:var(--muted);font-weight:600}
+.kv dd{margin:0}
+.human{border-left:3px solid var(--brand);background:var(--info-bg);border-radius:0 8px 8px 0;
+  padding:14px 16px;margin-top:14px}
+.human h3{margin:0 0 4px;font-size:13.5px;color:var(--brand)}
+.human .why{font-size:12.5px;color:#41506b;margin:0 0 12px}
+.decided{background:var(--ok-bg);border-left-color:var(--ok)}
+.decided h3{color:var(--ok)}
+.opt{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);
+  border-radius:7px;background:#fff;margin-bottom:7px;cursor:pointer}
+.opt input{margin-top:3px}
+.chain{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0 2px}
+.chain .node{padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;
+  border:1px solid var(--line);background:#fff;color:var(--muted)}
+.chain .node.hit{background:var(--ok-bg);color:var(--ok);border-color:#b7e0c9}
+.chain .node.miss{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}
+.chain .node.manual{border-style:dashed;color:var(--brand)}
+.chain .arrow{color:#c3c8d2;font-size:12px}
+.empty{color:var(--muted);font-size:13px;padding:14px;text-align:center;border:1px dashed var(--line);border-radius:8px}
+.warnbar{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 13px;
+  font-size:12.5px;margin-bottom:12px}
+.bar{height:7px;background:#eef0f4;border-radius:4px;overflow:hidden;margin-top:5px}
+.bar > i{display:block;height:100%;background:var(--brand-2)}
+footer{color:var(--muted);font-size:12px;padding:26px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>社媒 × 平台 Trend 选品 MVP</h1>
+  <p>先出数据再分析 · 每阶段一个 gate · 趋势数据走降级链并留痕 · 关键节点由人裁决</p>
+</header>
+<div class="tabs">
+  <button id="tab-trend" class="on" onclick="setTab('trend')">趋势获取</button>
+  <button id="tab-stages" onclick="setTab('stages')">阶段推进与人工判断</button>
+</div>
+
+<main>
+  <!-- ======================= TREND ======================= -->
+  <section id="pane-trend">
+    <div class="card">
+      <h2>数据源状态</h2>
+      <p class="sub">趋势数据的一级源是电商侧 MCP。点一下拿真实的连通性与工具数，不猜。</p>
+      <div class="chips" id="srcChips"><span class="chip info">未探测</span></div>
+      <div style="margin-top:12px"><button class="act" onclick="probeSources(this)">探测数据源</button></div>
+      <div id="srcDetail"></div>
+    </div>
+
+    <div class="card">
+      <h2>趋势数据获取</h2>
+      <p class="sub">按关键词逐个走降级链：<span class="mono" id="chainLabel"></span>。
+        每次尝试都记录层级、耗时、原始响应，命中即停。</p>
+      <div class="row">
+        <div style="flex:1;min-width:280px">
+          <label>关键词（逗号或换行分隔，身份热词优先，不要商品词）</label>
+          <input id="kwInput" placeholder="that girl, pilates girl, balletcore, reformer pilates">
+        </div>
+        <div>
+          <label>市场</label>
+          <select id="marketSel">
+            <option>US</option><option>UK</option><option>DE</option><option>JP</option>
+          </select>
+        </div>
+        <div><button class="act" id="fetchBtn" onclick="fetchTrend(this)">获取趋势</button></div>
+      </div>
+      <div id="trendOut"></div>
+    </div>
+
+    <div class="card">
+      <h2>人工兜底：粘贴公开页数据</h2>
+      <p class="sub">当一级/二级源都拿不到（配额耗尽、长尾词返回空序列）时，从 Google Trends 公开页抄一份进来。
+        这是降级链第三级，<strong>source_tier 会记成 <span class="mono">web</span></strong>，报告里会如实标注。</p>
+      <div class="row">
+        <div style="min-width:200px"><label>关键词</label><input id="manKw" placeholder="pilates girl"></div>
+        <div style="flex:1;min-width:280px">
+          <label>数据（每行 <span class="mono">2023-01,42</span>，或直接粘贴 JSON）</label>
+          <textarea id="manRaw" placeholder="2023-01,42&#10;2023-02,45&#10;2023-03,51"></textarea>
+        </div>
+        <div><button class="ghost" onclick="manualSubmit(this)">写入缓存</button></div>
+      </div>
+      <div id="manOut"></div>
+    </div>
+  </section>
+
+  <!-- ======================= STAGES ======================= -->
+  <section id="pane-stages" style="display:none">
+    <div class="two">
+      <div>
+        <div class="card" style="padding:14px">
+          <h2 style="margin-bottom:12px">阶段</h2>
+          <div class="stages" id="stageList"></div>
+          <p class="sub" style="margin:14px 0 0;font-size:11.5px">
+            灰点＝未做判断；绿点＝已记录人的判断。</p>
+        </div>
+        <div class="card" style="padding:14px">
+          <h2 style="margin-bottom:8px">决策记录</h2>
+          <div id="decisionLog"></div>
+        </div>
+      </div>
+      <div id="stageDetail"></div>
+    </div>
+  </section>
+
+  <footer>由 product-selection skill 的 mvp/ 生成 · 数据只来自 data/*.csv 与实时 MCP 调用</footer>
+</main>
+
+<script>
+const S = {boot:null, tab:'trend', stage:'S0', trend:null, sources:null};
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fnum = (v,d=2) => (v==null||v==='')?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+
+async function api(path, body){
+  const r = await fetch(path, body===undefined ? {} :
+    {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  return r.json();
+}
+
+/* ---------------- tabs (+ deep-linkable hash: #stages/S2) ---------------- */
+function setTab(t){ location.hash = t === 'stages' ? 'stages/' + S.stage : t; applyHash(); }
+function pickStage(id){ location.hash = 'stages/' + id; applyHash(); }
+
+function applyHash(){
+  const parts = (location.hash||'').replace(/^#/,'').split('/');
+  const tab = parts[0] === 'stages' ? 'stages' : 'trend';
+  if(tab==='stages' && parts[1] && S.boot && S.boot.stages.some(s=>s.id===parts[1])) S.stage = parts[1];
+  S.tab = tab;
+  $('tab-trend').classList.toggle('on', tab==='trend');
+  $('tab-stages').classList.toggle('on', tab==='stages');
+  $('pane-trend').style.display = tab==='trend' ? '' : 'none';
+  $('pane-stages').style.display = tab==='stages' ? '' : 'none';
+  if(S.boot){ renderStageList(); renderStageDetail(); }
+  // deep-linking to #stages/S2 should land on the decision, not on the header
+  if(tab==='stages' && parts[1] && !S._scrolled){
+    S._scrolled = true;
+    const el = document.querySelector('.human');
+    if(el) el.scrollIntoView({block:'center'});
+  }
+}
+window.addEventListener('hashchange', applyHash);
+
+/* ---------------- sources ---------------- */
+function renderSources(){
+  const d = S.sources || (S.boot && S.boot.sources);
+  if(!d || !d.sources || !Object.keys(d.sources).length){
+    $('srcChips').innerHTML = '<span class="chip info">未探测</span>';
+    return;
+  }
+  $('srcChips').innerHTML = Object.entries(d.sources).map(([k,v])=>{
+    const cls = v.status==='ok'?'ok':v.status==='degraded'?'warn':'bad';
+    const tail = v.tool_count ? ' · '+v.tool_count+' tools' : (v.latency_ms!=null?' · '+v.latency_ms+'ms':'');
+    return `<span class="chip ${cls}" title="${esc(v.error||v.note||'')}">${esc(v.label||k)}${tail}</span>`;
+  }).join('') + `<span class="chip info">探测于 ${esc((d.checked_at||'').replace('T',' ').replace('Z',''))}</span>`;
+  $('srcDetail').innerHTML = '<div class="scroll" style="margin-top:12px"><table><thead><tr>'+
+    ['源','层级','类型','状态','工具数','耗时','覆盖 / 说明'].map(h=>`<th>${h}</th>`).join('')+
+    '</tr></thead><tbody>'+ Object.entries(d.sources).map(([k,v])=>`<tr>
+      <td class="mono">${esc(k)}</td><td>T${esc(v.tier)}</td><td>${esc(v.kind)}</td>
+      <td>${v.status==='ok'?'✅ ok':v.status==='degraded'?'⚠️ degraded':'❌ error'}</td>
+      <td>${v.tool_count||'—'}</td><td>${v.latency_ms!=null?v.latency_ms+'ms':'—'}</td>
+      <td>${esc((v.covers||[]).join(', ') || v.error || v.note || '')}</td></tr>`).join('')+
+    '</tbody></table></div>';
+}
+
+async function probeSources(btn){
+  btn.disabled = true; btn.textContent = '探测中…';
+  try{
+    const r = await api('/api/sources/probe', {});
+    S.sources = r; renderSources();
+  } finally { btn.disabled=false; btn.textContent='探测数据源'; }
+}
+
+/* ---------------- trend ---------------- */
+async function fetchTrend(btn){
+  const kws = $('kwInput').value.split(/[,\n]/).map(s=>s.trim()).filter(Boolean);
+  if(!kws.length){ $('trendOut').innerHTML = '<div class="warnbar">先填关键词。</div>'; return; }
+  btn.disabled=true; btn.textContent='获取中…（逐个走降级链）';
+  $('trendOut').innerHTML = '<div class="empty">正在按序尝试一级源…</div>';
+  try{
+    const r = await api('/api/trend/fetch', {keywords:kws, market:$('marketSel').value});
+    S.trend = r; renderTrend(r);
+    await reload();
+  } finally { btn.disabled=false; btn.textContent='获取趋势'; }
+}
+
+function chainViz(attempts, chain){
+  const nodes = [];
+  if(!chain) chain = ['mcp:sellersprite','mcp:sorftime'];
+  chain.forEach(c=>{
+    const [tier,src] = c.split(':');
+    const a = attempts.find(x=>x.source===src);
+    const cls = !a ? 'node' : (a.status==='ok' ? 'node hit' : a.status==='manual' ? 'node manual' : 'node miss');
+    const lat = a && a.latency_ms ? ` · ${a.latency_ms}ms` : '';
+    const mark = a ? (a.status==='ok'?'✓':a.status==='quota_exhausted'?'配额耗尽':'✗') : '未尝试';
+    nodes.push(`<span class="${cls}" title="${esc(a?(a.error||'ok'):'')}">${esc(src)} · ${mark}${lat}</span>`);
+  });
+  const man = attempts.find(x=>x.tier==='web');
+  if(man) nodes.push('<span class="arrow">→</span><span class="node manual">人工粘贴</span>');
+  return '<div class="chain">'+nodes.join('<span class="arrow">→</span>')+'</div>';
+}
+
+function renderTrend(r){
+  if(!r.results){ $('trendOut').innerHTML=''; return; }
+  $('trendOut').innerHTML = r.results.map(res=>{
+    const L = res.landed, sm = L && L.summary;
+    const v = sm ? sm.trend_verdict : null;
+    const vcls = v==='Trend'?'ok':v==='Fad'?'bad':'warn';
+    const head = `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div><strong style="font-size:14px">${esc(res.keyword)}</strong>
+        ${v?`<span class="chip ${vcls}" style="margin-left:9px">${v}</span>`:''}
+        ${L?`<span class="chip info" style="margin-left:6px">命中 source_tier=${esc(L.tier)}</span>`:
+             `<span class="chip bad" style="margin-left:6px">未取到</span>`}</div>
+        ${sm?`<div class="mono" style="color:var(--muted)">CAGR ${fnum(sm.cagr_pct)}% · 季节性 ${fnum(sm.seasonality_index,1)} · ${sm.n_periods} 期</div>`:''}
+      </div>`;
+    const chart = (L && L.series && L.series.length>1) ? lineChart(L.series) : '';
+    const attemptsTbl = `<div class="scroll" style="margin-top:10px"><table><thead><tr>
+        <th>层级</th><th>源 / 工具</th><th>请求参数</th><th>结果</th><th>耗时</th><th>原始响应片段</th>
+      </tr></thead><tbody>${res.attempts.map(a=>`<tr>
+        <td>${esc(a.tier)}</td>
+        <td class="mono">${esc(a.source)}<br>${esc(a.tool)}</td>
+        <td class="mono" style="max-width:220px;word-break:break-all">${esc(JSON.stringify(a.request||{}))}</td>
+        <td>${a.status==='ok'?'✅ 命中':a.status==='quota_exhausted'?'⚠️ 配额耗尽':a.status==='manual'?'✋ 需人工':'❌ 失败'}
+            ${a.error?`<div style="color:var(--bad);font-size:11.5px">${esc(a.error)}</div>`:''}</td>
+        <td>${a.latency_ms?a.latency_ms+'ms':'—'}</td>
+        <td style="max-width:340px"><details><summary>展开${a.raw_path?` · <span class="mono" style="font-weight:400">${esc(a.raw_path)}</span>`:''}</summary><pre>${esc((a.raw_excerpt||'').slice(0,900))}</pre></details></td>
+      </tr>`).join('')}</tbody></table></div>`;
+    const seriesTbl = (L && L.series) ? `<details style="margin-top:10px"><summary>解析出的时间序列（${L.series.length} 期）</summary>
+        <div class="scroll" style="max-height:220px;margin-top:8px"><table><thead><tr><th>period</th><th>value</th></tr></thead>
+        <tbody>${L.series.map(([p,val])=>`<tr><td class="mono">${esc(p)}</td><td class="mono">${fnum(val)}</td></tr>`).join('')}</tbody></table></div></details>` : '';
+    return `<div class="card" style="box-shadow:none;border-color:#d9dee8">${head}${chainViz(res.attempts, r.chain)}
+      ${chart}${seriesTbl}${attemptsTbl}</div>`;
+  }).join('');
+}
+
+/* hand-written SVG line chart - no chart library, works offline */
+function lineChart(series, w=760, h=190){
+  const pad = {l:44, r:14, t:14, b:26};
+  const vals = series.map(s=>s[1]);
+  const max = Math.max(...vals), min = Math.min(0, Math.min(...vals));
+  const iw = w-pad.l-pad.r, ih = h-pad.t-pad.b;
+  const x = i => pad.l + (series.length<2?0:i*(iw/(series.length-1)));
+  const y = v => pad.t + ih - ((v-min)/((max-min)||1))*ih;
+  const pts = series.map((s,i)=>`${x(i).toFixed(1)},${y(s[1]).toFixed(1)}`).join(' ');
+  const ticks = [0,.25,.5,.75,1].map(t=>{
+    const v = min + (max-min)*t, yy = pad.t+ih-ih*t;
+    return `<line x1="${pad.l}" y1="${yy.toFixed(1)}" x2="${w-pad.r}" y2="${yy.toFixed(1)}" stroke="#eef0f4"/>
+            <text x="${pad.l-7}" y="${(yy+3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="#9ca3af">${Math.round(v)}</text>`;
+  }).join('');
+  const step = Math.max(1, Math.ceil(series.length/8));
+  const xlab = series.map((s,i)=> i%step===0 || i===series.length-1 ?
+    `<text x="${x(i).toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="9.5" fill="#9ca3af">${esc(s[0])}</text>`:'').join('');
+  const area = `M${x(0).toFixed(1)},${(pad.t+ih).toFixed(1)} L${pts.replace(/ /g,' L')} L${x(series.length-1).toFixed(1)},${(pad.t+ih).toFixed(1)} Z`;
+  const dots = series.length<=36 ? series.map((s,i)=>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(s[1]).toFixed(1)}" r="2" fill="#1f3864"/>`).join('') : '';
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" style="margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:8px">
+    ${ticks}<path d="${area}" fill="rgba(46,83,149,.09)"/>
+    <polyline points="${pts}" fill="none" stroke="#1f3864" stroke-width="2" stroke-linejoin="round"/>
+    ${dots}${xlab}</svg>`;
+}
+
+async function manualSubmit(btn){
+  const kw = $('manKw').value.trim(), raw = $('manRaw').value;
+  if(!kw || !raw.trim()){ $('manOut').innerHTML='<div class="warnbar">关键词和内容都要填。</div>'; return; }
+  btn.disabled = true;
+  try{
+    const r = await api('/api/trend/manual', {keyword:kw, raw, market:$('marketSel').value});
+    $('manOut').innerHTML = r.ok
+      ? `<div class="chip ok" style="margin-top:10px">已写入缓存：${esc(kw)} · ${r.series_points} 期 · source_tier=web</div>`
+      : `<div class="warnbar" style="margin-top:10px">${esc(r.error)}</div>`;
+    if(r.ok) await reload();
+  } finally { btn.disabled=false; }
+}
+
+/* ---------------- stages ---------------- */
+function renderStageList(){
+  $('stageList').innerHTML = S.boot.stages.map(s=>{
+    const done = !!s.decision;
+    return `<div class="stage ${S.stage===s.id?'on':''}" onclick="pickStage('${s.id}')">
+      <span class="id">${s.id}</span>
+      <span class="nm">${esc(s.name)}</span>
+      <span class="tag">${done?'● 已判断':(s.human.kind==='none'?'○ 自动':'○ 待判断')}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderStageDetail(){
+  const s = S.boot.stages.find(x=>x.id===S.stage);
+  const hp = s.human, dec = s.decision;
+  const inputs = s.inputs.map(i=>`<tr><td class="mono">${esc(i.path)}</td>
+      <td class="mono" style="font-size:11.5px">${i.columns?i.columns.map(esc).join(', '):'（二进制/非表格）'}</td></tr>`).join('');
+  const gates = Object.entries(S.boot.gate_defaults||{}).map(([k,v])=>`<tr><td class="mono">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+  let widget = '';
+  if(hp.kind === 'none'){
+    widget = `<div class="human"><h3>无需人工判断</h3><p class="why">${esc(hp.question)}</p></div>`;
+  } else if(dec){
+    widget = `<div class="human decided"><h3>✓ 已记录人的判断</h3>
+      <p class="why">${esc(hp.question)}</p>
+      <dl class="kv"><dt>选择</dt><dd><strong>${esc(dec.target||dec.action)}</strong></dd>
+      ${dec.note?`<dt>理由</dt><dd>${esc(dec.note)}</dd>`:''}
+      <dt>时间</dt><dd class="mono">${esc(dec.decided_at)}</dd></dl>
+      <button class="ghost" onclick="clearDecision('${s.id}')">重新判断</button></div>`;
+  } else {
+    widget = `<div class="human"><h3>需要你判断 · ${esc(hp.question)}</h3>
+      <p class="why">${esc(hp.why)}</p>${decisionForm(s)}</div>`;
+  }
+  $('stageDetail').innerHTML = `
+    <div class="card">
+      <h2>${s.id} · ${esc(s.name)}</h2>
+      <p class="sub">${esc(s.goal)}</p>
+      <dl class="kv"><dt>降级链</dt><dd class="mono">${s.fallback.map(esc).join(' → ')}</dd>
+        <dt>分析产物</dt><dd class="mono">${s.analysis.map(esc).join(', ')}</dd></dl>
+    </div>
+    <div class="card">
+      <h2>输入契约</h2>
+      <p class="sub">上一阶段的产物必须满足这些列才能进入本阶段 —— 缺列直接卡住，不允许"大致满足"。</p>
+      <div class="scroll"><table><thead><tr><th>文件</th><th>必需列</th></tr></thead><tbody>${inputs}</tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>筛选阈值</h2>
+      <p class="sub">来自 config.local.json 的 gate_defaults。调阈值必须在下面的理由里写明为什么，否则记录会被拒绝。</p>
+      <div class="scroll" style="max-height:260px"><table><thead><tr><th>阈值</th><th>值</th></tr></thead><tbody>${gates}</tbody></table></div>
+    </div>
+    ${widget}`;
+}
+
+function decisionForm(s){
+  const hp = s.human;
+  const cache = Object.entries(S.boot.cache||{});
+  const reason = `<div style="margin-top:10px"><label>理由（必填，会进决策记录）</label>
+      <textarea id="decNote" style="min-height:60px" placeholder="为什么这么判断？"></textarea></div>`;
+  if(hp.kind === 'proceed_or_stop'){
+    return hp.options.map((o,i)=>`<label class="opt"><input type="radio" name="decOpt" value="${o.value}" ${i===0?'checked':''}>
+      <span>${esc(o.label)}</span></label>`).join('')
+      + reason + submitRow();
+  }
+  if(hp.kind === 'reclassify'){
+    if(!cache.length){
+      return `<div class="warnbar">还没有趋势数据。先去「趋势获取」拉一轮，Unclear 的词会出现在这里由你裁决。</div>`
+        + `<button class="ghost" onclick="setTab('trend')">去获取趋势</button>`;
+    }
+    return cache.map(([kw,v])=>{
+      const sm = v.summary||{}, verdict = sm.trend_verdict||'—';
+      return `<div style="border:1px solid var(--line);border-radius:8px;padding:11px 13px;background:#fff;margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <strong>${esc(kw)}</strong>
+          <span class="mono" style="color:var(--muted)">机器判定 <b>${esc(verdict)}</b> · CAGR ${fnum(sm.cagr_pct)}% · 季节性 ${fnum(sm.seasonality_index,1)} · ${sm.n_periods||0} 期</span>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:9px;flex-wrap:wrap">
+          ${['接受机器判定','改判为 Trend','改判为 Fad','数据不足，弃用这个词'].map((l,i)=>
+            `<label class="opt" style="margin:0;padding:6px 10px"><input type="radio" name="rc_${esc(kw)}" value="${['accept','Trend','Fad','drop'][i]}" ${i===0?'checked':''}><span>${l}</span></label>`).join('')}
+        </div></div>`;
+    }).join('') + reason
+      + `<div style="margin-top:6px" class="warnbar">批量改判不需要阈值也能记录，但每个词的改判理由请写在同一个理由框里。</div>`
+      + submitRow();
+  }
+  // pick_one
+  const cands = hp.target === 'identity' ? cache.map(([k])=>k) : [];
+  const free = `<div style="margin-top:8px"><label>或者手填（S3/S4/S6 的候选来自语料与市场分析）</label>
+      <input id="decTarget" placeholder="填一个名称"></div>`;
+  if(cands.length){
+    return cands.map((c,i)=>`<label class="opt"><input type="radio" name="decOpt" value="${esc(c)}" ${i===0?'checked':''}>
+      <span class="mono">${esc(c)}</span></label>`).join('')
+      + `<div style="margin-top:8px"><label>或者手填别的</label><input id="decTarget" placeholder="留空则用上面的选项"></div>`
+      + reason + submitRow();
+  }
+  return `<div class="warnbar">这个阶段的候选来自语料/市场分析（MVP 未接入），直接手填你的判断。</div>`
+    + free + reason + submitRow();
+}
+
+function submitRow(){
+  return `<div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+    <button class="act" onclick="submitDecision(this)">记录判断</button>
+    <span id="decMsg" style="font-size:12.5px"></span></div>`;
+}
+
+async function submitDecision(btn){
+  const s = S.boot.stages.find(x=>x.id===S.stage);
+  const note = ($('decNote')||{}).value || '';
+  const free = ($('decTarget')||{}).value || '';
+  let value = null, action = 'confirm';
+  if(s.human.kind === 'reclassify'){
+    action = 'reclassify';
+    value = {};
+    Object.keys(S.boot.cache||{}).forEach(([kw])=>{});
+    Object.entries(S.boot.cache||{}).forEach(([kw])=>{
+      const el = document.querySelector(`input[name="rc_${CSS.escape(kw)}"]:checked`);
+      if(el) value[kw] = el.value;
+    });
+  } else {
+    const el = document.querySelector('input[name="decOpt"]:checked');
+    value = free || (el ? el.value : '');
+    if(s.human.kind === 'proceed_or_stop') action = value;
+  }
+  btn.disabled = true;
+  try{
+    const r = await api('/api/decision', {stage:S.stage, action, target: (typeof value==='string'?value:''), value, note});
+    if(r.ok){ await reload(); }
+    else { $('decMsg').innerHTML = `<span style="color:var(--bad)">${esc(r.error)}</span>`; }
+  } finally { btn.disabled=false; }
+}
+
+async function clearDecision(stage){ await api('/api/decision/clear', {stage}); await reload(); }
+
+function renderDecisionLog(){
+  const rows = S.boot.stages.filter(s=>s.decision).map(s=>{
+    const d = s.decision;
+    const val = typeof d.payload === 'object' && d.payload ? JSON.stringify(d.payload) : (d.target||d.action);
+    return `<tr><td class="mono">${s.id}</td><td>${esc(val)}</td>
+      <td>${esc(d.note||'—')}</td><td class="mono" style="font-size:11px">${esc((d.decided_at||'').replace('T',' ').replace('Z',''))}</td></tr>`;
+  }).join('');
+  $('decisionLog').innerHTML = rows
+    ? `<div class="scroll" style="max-height:300px"><table><thead><tr><th>阶段</th><th>判断</th><th>理由</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : '<div class="empty">还没有任何人工判断。进阶段页逐个做。</div>';
+}
+
+/* ---------------- boot ---------------- */
+async function reload(){
+  S.boot = await api('/api/bootstrap');
+  if(!S.sources && S.boot.sources && Object.keys(S.boot.sources.sources||{}).length) S.sources = S.boot.sources;
+  renderSources(); renderStageList(); renderStageDetail(); renderDecisionLog();
+  if(S.boot.last_trend && !S.trend){ S.trend = S.boot.last_trend; renderTrend(S.boot.last_trend); }
+  $('chainLabel').textContent = (S.boot.fallback_chain||[]).join(' → ');
+  applyHash();
+}
+$('kwInput').value = 'that girl, pilates girl, balletcore';
+reload();
+</script>
+</body>
+</html>

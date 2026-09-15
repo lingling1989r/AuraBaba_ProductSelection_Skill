@@ -85,6 +85,24 @@ python3 $SK/scripts/pipeline.py --run-dir ./selection_run finalize
 
 `examples/` 下有一份实测产物可以直接看效果。
 
+## MVP：可交互的 Demo
+
+`mvp/` 是一个本地 Web MVP，把上面这条流水线跑给人看，只用标准库：
+
+```bash
+cd mvp && python3 server.py        # http://127.0.0.1:8787
+```
+
+它补上 CLI 流水线故意没有自动化的两件事：
+
+- **看得见的趋势获取** —— 每个词按序走降级链（sellersprite → sorftime → 人工粘贴），
+  记录每次尝试的层级、耗时、原始响应与失败原因。页面上能直接看到
+  「哪个 tier 命中、花了多久、原始返回长什么样、解析出多少期、CAGR 与季节性是多少」。
+- **必须由人回答的问题** —— S0–S7 每个阶段一个人判断节点（选入口圈层、逐词复核
+  Trend/Fad、决定市场是否值得进、只挑一个候选打样）。**改阈值不写理由会被拒绝**。
+
+详见 [mvp/README.md](mvp/README.md)。
+
 ## 文档
 
 - [SKILL.md](SKILL.md) — 技能主文档
