@@ -1,0 +1,101 @@
+{
+  "_comment": "TEMPLATE. Copy this file to config.local.json and fill in your own keys. config.local.json is gitignored - never commit real keys.",
+  "sources": {
+    "tikhub": {
+      "tier": 1,
+      "kind": "mcp+rest",
+      "label": "TikHub (社媒)",
+      "mcp_url": "https://mcp.tikhub.io/tikhub/mcp",
+      "auth_header": "Authorization",
+      "auth_prefix": "Bearer ",
+      "api_key": "YOUR_TIKHUB_API_KEY",
+      "rest_base": "https://api.tikhub.io",
+      "rest_auth_header": "Authorization",
+      "rest_auth_prefix": "Bearer ",
+      "requires_browser_ua": true,
+      "covers": [
+        "tiktok",
+        "instagram",
+        "youtube",
+        "xiaohongshu",
+        "douyin",
+        "weibo",
+        "kuaishou",
+        "xigua"
+      ],
+      "notes": "MCP exposes 23 tools (user info + demos + hybrid_video_data). The full data surface is the REST API (api.tikhub.io) with the same key. Cloudflare blocks non-browser User-Agent (error 1010) - always send a browser UA."
+    },
+    "sellersprite": {
+      "tier": 1,
+      "kind": "mcp",
+      "label": "卖家精灵 SellerSprite (电商)",
+      "mcp_url": "https://mcp.sellersprite.com/mcp?secret-key=YOUR_SELLERSPRITE_SECRET_KEY",
+      "auth_header": null,
+      "auth_prefix": "",
+      "api_key": null,
+      "requires_browser_ua": false,
+      "covers": [
+        "amazon"
+      ],
+      "notes": "45 tools. Key sits in the query string. Strong on Amazon: market_research, keyword_research, aba_research_weekly/monthly, google_trend, product_research, asin_prediction."
+    },
+    "sorftime": {
+      "tier": 1,
+      "kind": "mcp",
+      "label": "Sorftime (电商+站外)",
+      "mcp_url": "https://mcp.sorftime.com?key=YOUR_SORFTIME_KEY",
+      "auth_header": null,
+      "auth_prefix": "",
+      "api_key": null,
+      "requires_browser_ua": false,
+      "covers": [
+        "amazon",
+        "tiktok_shop",
+        "shopee",
+        "temu",
+        "walmart",
+        "1688",
+        "reddit"
+      ],
+      "notes": "105 tools. Multi-platform. reddit_post_search is a genuine social-voice source; tiktok_product_search covers TikTok Shop; ali1688_similar_product covers sourcing."
+    },
+    "apify": {
+      "tier": 2,
+      "kind": "cli",
+      "label": "Apify (降级 1)",
+      "command": "apify",
+      "env": [
+        "APIFY_TOKEN"
+      ],
+      "requires_browser_ua": false,
+      "notes": "Fallback scraper layer. Needs APIFY_TOKEN in env; if absent this tier is skipped and the chain falls through to tier 3."
+    },
+    "web": {
+      "tier": 3,
+      "kind": "tool",
+      "label": "WebFetch / WebSearch (降级 2)",
+      "notes": "Grounded public-page search & fetch. Good for Google Trends snapshots, public keyword pages, news/blog signals. No auth, no structured schema - normalize results by hand into the stage CSV."
+    },
+    "browser": {
+      "tier": 4,
+      "kind": "tool",
+      "label": "浏览器操作 (降级 3，最后手段)",
+      "notes": "browser-skill (bsk CLI) against the logged-in Chromium. Use only when tiers 1-3 are exhausted; slow and non-deterministic. Always record URL + capture timestamp in the stage provenance file."
+    }
+  },
+  "fallback_chain": [
+    "mcp",
+    "apify",
+    "web",
+    "browser"
+  ],
+  "gate_defaults": {
+    "min_keywords": 8,
+    "trend_min_cagr_pct": 10.0,
+    "trend_min_months": 24,
+    "painpoint_min_share_pct": 20.0,
+    "min_market_size_usd": 10000000,
+    "max_top10_brand_share_pct": 70.0,
+    "min_candidates": 3
+  }
+}

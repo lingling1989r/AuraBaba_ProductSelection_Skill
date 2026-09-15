@@ -1,0 +1,16 @@
+# Real credentials - never commit. Use config.local.example.json as the template.
+config.local.json
+
+# Generated run artifacts
+run/
+selection_run/
+out/
+raw/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
