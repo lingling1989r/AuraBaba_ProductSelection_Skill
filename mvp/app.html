@@ -96,6 +96,7 @@ footer{color:var(--muted);font-size:12px;padding:26px;text-align:center}
 <header>
   <h1>社媒 × 平台 Trend 选品 MVP</h1>
   <p>先出数据再分析 · 每阶段一个 gate · 趋势数据走降级链并留痕 · 关键节点由人裁决</p>
+  <div id="runLine" style="margin-top:11px;font-size:12.5px"></div>
 </header>
 <div class="tabs">
   <button id="tab-trend" class="on" onclick="setTab('trend')">趋势获取</button>
@@ -105,6 +106,20 @@ footer{color:var(--muted);font-size:12px;padding:26px;text-align:center}
 <main>
   <!-- ======================= TREND ======================= -->
   <section id="pane-trend">
+    <div class="card">
+      <h2>本次调研</h2>
+      <p class="sub">给这一轮选品起个名字 —— <strong>用户填，不替你猜</strong>。
+        名字只做标识、不参与取数，但它是记录名，之后靠它在 <span class="mono">run/</span> 里把这一轮找回来。</p>
+      <div class="row">
+        <div style="flex:1;min-width:280px">
+          <label>调研名称</label>
+          <input id="topicInput" placeholder="北美普拉提女孩圈层 防滑袜选品验证">
+        </div>
+        <div><button class="act" onclick="saveRunName(this)">保存名称</button></div>
+      </div>
+      <div id="topicOut"></div>
+    </div>
+
     <div class="card">
       <h2>数据源状态</h2>
       <p class="sub">趋势数据的一级源是电商侧 MCP。点一下拿真实的连通性与工具数，不猜。</p>
@@ -237,9 +252,42 @@ async function probeSources(btn){
   } finally { btn.disabled=false; btn.textContent='探测数据源'; }
 }
 
+/* ---------------- run name ---------------- */
+function renderRunLine(){
+  const t = (S.boot && S.boot.run && S.boot.run.topic) || '';
+  $('runLine').innerHTML = t
+    ? `本次调研：<strong>${esc(t)}</strong>`
+      + `<span style="opacity:.7"> · 命名于 ${esc((S.boot.run.named_at)||'')}</span>`
+    : '<span style="color:var(--warn)">尚未命名 —— 三样输入（调研名称 / 市场 / 种子词）齐了才能取数。</span>';
+}
+
+async function saveRunName(btn){
+  const topic = $('topicInput').value.trim();
+  if(topic.length < 2){
+    $('topicOut').innerHTML = '<div class="warnbar" style="margin-top:10px">'
+      + '调研名称不能为空 —— 它是这一轮选品的记录名，之后靠它把记录找回来。</div>';
+    $('topicInput').focus();
+    return;
+  }
+  btn.disabled=true; btn.textContent='保存中…';
+  try{
+    const r = await api('/api/run/name', {topic});
+    $('topicOut').innerHTML = r.ok
+      ? `<div class="chip ok" style="margin-top:10px">已命名：${esc(r.topic)}</div>`
+      : `<div class="warnbar" style="margin-top:10px">${esc(r.error)}</div>`;
+    if(r.ok) await reload();
+  } finally { btn.disabled=false; btn.textContent='保存名称'; }
+}
+
 /* ---------------- trend ---------------- */
 async function fetchTrend(btn){
   const kws = $('kwInput').value.split(/[,\n]/).map(s=>s.trim()).filter(Boolean);
+  if(!(S.boot && S.boot.run && S.boot.run.topic)){
+    $('trendOut').innerHTML = '<div class="warnbar">先给这次调研起个名字 —— '
+      + '它是这一轮选品的记录名，之后靠它把记录找回来。</div>';
+    $('topicInput').focus();
+    return;
+  }
   if(!kws.length){
     $('trendOut').innerHTML = '<div class="warnbar">先填关键词 —— 给圈层身份词（如 that girl），不要给商品词。</div>';
     return;
@@ -493,7 +541,8 @@ function renderDecisionLog(){
 async function reload(){
   S.boot = await api('/api/bootstrap');
   if(!S.sources && S.boot.sources && Object.keys(S.boot.sources.sources||{}).length) S.sources = S.boot.sources;
-  renderSources(); renderStageList(); renderStageDetail(); renderDecisionLog();
+  renderSources(); renderRunLine(); renderStageList(); renderStageDetail(); renderDecisionLog();
+  if(S.boot.run && S.boot.run.topic && !$('topicInput').value) $('topicInput').value = S.boot.run.topic;
   if(S.boot.last_trend && !S.trend){ S.trend = S.boot.last_trend; renderTrend(S.boot.last_trend); }
   $('chainLabel').textContent = (S.boot.fallback_chain||[]).join(' → ');
   applyHash();

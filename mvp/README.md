@@ -56,7 +56,8 @@ python3 server.py            # 默认 8787，端口被占就 --port 8791
 | GET | `/api/bootstrap` | 阶段契约、阈值、数据源状态、趋势缓存、上次取数结果 |
 | GET | `/api/health` | 存活探测 |
 | POST | `/api/sources/probe` | 真实探测三个 MCP |
-| POST | `/api/trend/fetch` | `{keywords:[], market}` 逐词走降级链。**两个都必填**，缺了返回 400 —— 不用默认值兜 |
+| POST | `/api/run/name` | `{topic}` 给这一轮调研命名（记录名，只做标识） |
+| POST | `/api/trend/fetch` | `{keywords:[], market}` 逐词走降级链。调研未命名 / 缺 market / 缺 keywords 都返回 400 —— 不用默认值兜 |
 | POST | `/api/trend/manual` | `{keyword, raw, market}` 人工粘贴，记 `tier=web`。`market` 同样必填 |
 | POST | `/api/decision` | `{stage, action, target, value, note}` 记录人的判断 |
 | POST | `/api/decision/clear` | `{stage}` 撤销 |
@@ -65,6 +66,7 @@ python3 server.py            # 默认 8787，端口被占就 --port 8791
 
 ```
 mvp/run/
+  meta.json         本次调研的名称（记录名，用户填）
   decisions.json    人的判断（含理由与时间戳）
   trend_cache.json  每个词最终命中的序列与判定
   last_trend.json   上一次取数的完整过程（含降级链走位），刷新后仍可回放

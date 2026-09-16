@@ -41,6 +41,7 @@ DECISIONS_PATH = RUN_DIR / "decisions.json"
 CACHE_PATH = RUN_DIR / "trend_cache.json"
 LAST_TREND_PATH = RUN_DIR / "last_trend.json"
 SOURCES_PATH = RUN_DIR / "sources.json"
+META_PATH = RUN_DIR / "meta.json"
 
 # --------------------------------------------------------------------------- spec
 # The human question for each stage. `kind` drives the widget the UI renders.
@@ -134,6 +135,26 @@ def load_decisions() -> dict:
 
 def load_cache() -> dict:
     return _load(CACHE_PATH, {})
+
+
+def load_meta() -> dict:
+    return _load(META_PATH, {})
+
+
+def run_topic() -> str:
+    return (load_meta().get("topic") or "").strip()
+
+
+def set_run_topic(topic: str) -> dict:
+    topic = (topic or "").strip()
+    if len(topic) < 2:
+        return {"ok": False,
+                "error": "调研名称不能为空 —— 它是这一轮选品的记录名，之后靠它把记录找回来"}
+    meta = load_meta()
+    meta["topic"] = topic
+    meta["named_at"] = now()
+    _save(META_PATH, meta)
+    return {"ok": True, "topic": topic}
 
 
 def load_config() -> dict:
@@ -402,6 +423,7 @@ def bootstrap() -> dict:
         })
     return {
         "stages": stages,
+        "run": load_meta(),
         "sources": _load(SOURCES_PATH, {}),
         "cache": load_cache(),
         "last_trend": _load(LAST_TREND_PATH, None),
@@ -477,9 +499,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/sources/probe":
                 return self._send({"ok": True, **probe_sources()})
+            if path == "/api/run/name":
+                r = set_run_topic(body.get("topic") or "")
+                return self._send(r, 200 if r.get("ok") else 400)
             if path == "/api/trend/fetch":
                 kws = [k.strip() for k in (body.get("keywords") or []) if k and k.strip()]
                 market = (body.get("market") or "").strip().upper()
+                if not run_topic():
+                    return self._send(
+                        {"ok": False,
+                         "error": "先给这次调研起个名字 —— 它是这一轮选品的记录名，"
+                                  "之后靠它把记录找回来"}, 400)
                 if not kws:
                     return self._send(
                         {"ok": False, "error": "关键词不能为空 —— 给身份热词，不要商品词"}, 400)
@@ -491,6 +521,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"ok": True, **fetch_trend(kws, market)})
             if path == "/api/trend/manual":
                 market = (body.get("market") or "").strip().upper()
+                if not run_topic():
+                    return self._send(
+                        {"ok": False, "error": "先给这次调研起个名字，再往里写数据"}, 400)
                 if not market:
                     return self._send({"ok": False, "error": "市场不能为空"}, 400)
                 r = parse_manual(body.get("keyword") or "", body.get("raw") or "", market)
