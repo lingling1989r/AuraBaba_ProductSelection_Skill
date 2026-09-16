@@ -94,8 +94,11 @@
     "trend_min_cagr_pct": 10.0,
     "trend_min_months": 24,
     "painpoint_min_share_pct": 20.0,
-    "min_market_size_usd": 10000000,
+    "min_market_size_usd": 1000000,
     "max_top10_brand_share_pct": 70.0,
-    "min_candidates": 3
+    "min_candidates": 3,
+    "trend_min_abs_searches": 3000.0,
+    "s2_min_abs_coverage_pct": 50.0,
+    "s2_min_window_coverage_pct": 50.0
   }
 }

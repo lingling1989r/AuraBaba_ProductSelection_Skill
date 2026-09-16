@@ -100,6 +100,13 @@ python3 $SK/scripts/pipeline.py --run-dir ./selection_run init \
   --product-keyword "pilates grip socks" \
   --seed "that girl" --seed "pilates girl" --seed "reformer pilates"
 
+# 1b. S1 下钻：种子词开一圈更细的圈层词。每个词分两个环取
+python3 $SK/scripts/drill.py --run-dir ./selection_run --ring social --from "pilates girl"      # 社媒环 → 身份词
+python3 $SK/scripts/drill.py --run-dir ./selection_run --ring ecom   --from "pilates grip socks" # 电商环 → 商品词
+# 看完候选自己挑，挑中的再写库（不自动入库 —— 机器排序的环会漂向泛词）
+python3 $SK/scripts/drill.py --run-dir ./selection_run --ring social --from "pilates girl" \
+  --accept "pilatesstrength,pilatescommunity" --type identity
+
 # 2. 按阶段推进：fetch 能自动取数的，其余按契约补齐后 check
 python3 $SK/scripts/pipeline.py --run-dir ./selection_run fetch --stage S0
 python3 $SK/scripts/pipeline.py --run-dir ./selection_run check --stage S0
@@ -117,12 +124,32 @@ python3 $SK/scripts/pipeline.py --run-dir ./selection_run finalize
 ./selection_run/out/selection_data.xlsx     # 全量数据（15 个 sheet）
 ```
 
+## S1 是怎么下钻的
+
+种子词不是答案，是**入口**。用户给一个圈层自称词（`pilates girl`），机器顺着它开一圈
+同圈层、更具体的词；再下一级就再走一轮人的筛选。
+
+| 环 | 打到哪 | 产出 | 实测例（下钻 `pilates girl` / `pilates grip socks`） |
+|---|---|---|---|
+| `social` | tikhub 搜父词 → 视频带的 hashtag + 正文 `#tag` | **身份词** | `pilatesstrength`、`hotpilates`、`pilatesprincess`、`workoutsplit` |
+| `ecom` | SellerSprite `keyword_miner` 相关词环 | **商品词** | `pilates socks`、`grip socks`、`toe socks` |
+
+两个平面不能混：身份词是社区怎么称呼自己，商品词是人在 Amazon 里敲什么。
+`pilates girl` 在 Amazon 有 56 个月搜索数据、其中 55 个月是 0 —— 这就是两个平面的差别。
+
+**环永不自动入库**，因为机器排序的环会漂：下钻 `pilates grip socks` 时，`yoga mat`（1,129,657）
+和 `halloween`（781,484）都排在真正的兄弟词 `pilates socks`（425,318）前面；
+社媒环里头词 `pilates` 会在**每一级**回到共现第一。所以由人挑、`--accept` 显式写词，
+每个词都带 `level` + `parent_keyword`，可逐级回放。
+
+验证分两个平面（见 S2）：相对指数看形状，绝对搜索量看量级 —— 只有两个都过闸才算 Trend。
+
 ## 阶段总览
 
 | 阶段 | 名称 | 数据产出 | 自动取数 | 关键 gate |
 |---|---|---|---|---|
 | S0 | 环境与数据源自检 | `00_source_capability.csv` | ✅ | ≥1 个一级源可用 |
-| S1 | 圈层热词发现 | `01_seed_keywords.csv` | 半自动 | ≥8 词；含 `identity` 类型；溯源完整 |
+| S1 | 圈层热词发现（下钻） | `01_seed_keywords.csv` | 半自动 | ≥8 词；级间人筛；`level`/`parent_keyword` 链可回放 |
 | S2 | 趋势验证 | `02_trend_timeseries.csv` + `_summary.csv` | ✅ | ≥3 词；每个 ≥24 期；≥1 个判 Trend |
 | S3 | 场景与子圈层锁定 | `03_scene_keywords.csv` + `_subcommunity.csv` | 人工 | ≥10 场景词；≥1 子圈层 |
 | S4 | 语料池与痛点聚类 | `04_corpus_index.csv` + `_painpoints.csv` | 人工 | 提及总数 ≥100；Top 痛点占比 ≥20%；≥2 个类别 |

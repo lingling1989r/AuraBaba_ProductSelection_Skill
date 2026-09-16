@@ -48,37 +48,75 @@ run 目录结构：
 
 ---
 
-## S1 圈层热词发现
+## S1 圈层热词发现（多级下钻）
+
+S1 **不是**一份凭记忆敲出来的词表，而是一次**下钻**：一个种子词打开一圈同圈层的、
+更热更具体的词；再下一级就再走一轮人的筛选。机器排序的下钻环会漂向泛词，
+所以**每一级都必须由人挑一次，环永不自动入库**。
 
 **数据**：`data/01_seed_keywords.csv`
 
 | 列 | 说明 |
 |---|---|
 | keyword | 热词原文 |
-| keyword_type | `identity` / `scene` / `product` / `aesthetic` —— **必须有 identity** |
-| platform | tiktok / instagram / pinterest / youtube / google |
-| heat_score | 热度分（0–100，相对值，注明口径） |
+| keyword_type | `identity` / `scene` / `product` / `aesthetic` |
+| **level** | 0 = 用户给的种子，1 = 第一环，2 = 第二环…… |
+| **parent_keyword** | 被下钻的上一级词；level ≥ 1 必填 |
+| platform | tiktok / instagram / amazon / … |
+| heat_score | 热度分（相对值，注明口径） |
 | heat_cagr_pct | 观测窗口内的复合增长率 % |
 | obs_window | 观测窗口，如 `2022-01..2024-12` |
 | source_tier | 实际命中的降级层级 |
 | captured_at | 采集时间 |
-| evidence_url | 可点开的证据链接 |
+| evidence_url | `drill://{ring}/{parent}` —— 能回放到是哪个环产出的 |
 
-**取数配方**：
-1. 一级 —— tikhub MCP `demo_*` / `hybrid_video_data`；真正的全量数据走 TikHub REST
-   （`mcp_call.py rest --source tikhub --path ...`），例如
-   `/api/v1/tiktok/web/fetch_general_search?keyword=<kw>`
-2. 二级 —— Apify 的 TikTok / Instagram scraper actor
-3. 三级 —— WebFetch 抓公开标签页、热词榜、行业博客
-4. 四级 —— browser-skill 操作已登录浏览器
+**两个环、两个数据平面**（`scripts/drill.py`）：
 
-**Gate**：
-- ≥8 行，列齐
-- `keyword_type` 的取值集合里含 `identity`
-- 100% 的行带 `source_tier` + `captured_at`
+```bash
+# 社媒环：搜父词 → 收集视频实际带的 hashtag + 正文里的 #tag → 共现频次排序
+python3 drill.py --run-dir ./selection_run --ring social --from "pilates girl" --top 25
+python3 drill.py --run-dir ./selection_run --ring social --from "pilates girl" \
+    --accept "pilatesstrength,pilatescommunity" --type identity
 
-**分析**：`analysis/01_seed_notes.md` —— 说明入口热词是什么、为什么它对应的品类已经红海、
-下一步要找的"进化垂类"是什么。
+# 电商/搜索环：SellerSprite keyword_miner → Sorftime keyword_extends → 人工粘贴
+python3 drill.py --run-dir ./selection_run --ring ecom --from "pilates grip socks"
+```
+
+| 环 | 打到哪一层 | 产出什么词 |
+|---|---|---|
+| `social` | tikhub REST `fetch_general_search` | **圈层身份词**（社区怎么称呼自己） |
+| `ecom` | SellerSprite `keyword_miner` | **Amazon 搜索词**（商品词空间） |
+
+两个平面不能混：身份词不是商品词，商品词也不是身份词。
+
+**实测的漂移陷阱**（这正是不自动入库的理由）。下钻 `pilates grip socks`，按绝对搜索量排：
+
+```
+yoga mat                     1,129,657
+halloween                      781,484
+socks                          767,328
+pilates socks                  425,318   <- 真正的兄弟词
+socks for women                361,682
+```
+
+`halloween`、`yoga mat` 都比真正的兄弟词高 2–3 倍。社媒环同样会漂：下钻
+`pilates girl`，共现第一名是头词 `pilates`（47 次）；从 `pilatesstrength` 再下一级，
+`pilates` 又以 20 次回到第一 —— **头词会在每一级复现**。
+所以 `--accept` 必须显式给词，且每个采纳的词都带 `level` + `parent_keyword`。
+
+**Gate**（`pipeline.py::g_s1`）：
+- ≥8 行，列齐；100% 的行带 `source_tier` + `captured_at`
+- 每行都有可解析的 `level`
+- level 0 全部是 `identity`（种子是圈层入口，给商品词会把整轮选品带偏）
+- **每个由 social 环产出的层级至少含 1 个 `identity` 词** —— 该环若只出泛词/商品词，
+  说明它没在发现圈层；检查按 `evidence_url` 里的环类型区分，因此电商环合法地产出商品词
+  不会被误判
+- level ≥ 1 至少要有 1 个 identity 词（只重复种子不算下钻）
+- level ≥ 1 的词必须写明 `parent_keyword`，且父词在上一级真实存在（链可回放）
+- 至少下钻出一环（`max level ≥ 1`）
+
+**分析**：`analysis/01_seed_notes.md` —— 说明每一级拿到了什么、**人筛掉了什么以及为什么**
+（漂移的头词要点名）、两级之间的差别是什么。
 
 ---
 
@@ -87,34 +125,63 @@ run 目录结构：
 **数据**：
 - `data/02_trend_timeseries.csv`：`keyword, period, value, source, source_tier, captured_at`
   （`period` 用 `YYYY-MM`）
-- `data/02_trend_summary.csv`：`keyword, n_periods, first_value, last_value, cagr_pct, seasonality_index, trend_verdict, source_tier`
+- `data/02_trend_summary.csv`:
+  `keyword, level, n_periods, first_value, last_value, cagr_pct, seasonality_index,`
+  `abs_n_months, abs_searches, abs_cagr_pct, abs_growth_yoy, abs_growth_3m, abs_month,`
+  `abs_checked, trend_verdict, verdict_reason, source_tier`
+
+**两个平面，必须分开看**：
+
+| 平面 | 工具 | 给你什么 | 给不了什么 |
+|---|---|---|---|
+| 相对 | SellerSprite `google_trend` | 0–100 指数，看**形状**（涨/季节性/衰退） | 量级 |
+| 绝对 | SellerSprite `keyword_research_trends` | Amazon 月度**绝对**搜索量 | 历史形状（只有 Amazon 站内） |
+
+一个词可以从 30 次搜索涨 400% —— 只有绝对平面能拆穿它。所以**判定要两个平面都读到**。
 
 **取数**：`pipeline.py fetch --stage S2`（自动）
-调用 SellerSprite `google_trend`（`marketplace` + `monthly: true`），逐词取回月度数，
-再本地算 CAGR 与季节性指数。
 
-**判定规则**（写在 `pipeline.py::_trend_summary`）：
+**判定规则**（`pipeline.py::_trend_summary`，按顺序短路，每一条都写进 `verdict_reason`）：
 
-| 判定 | 条件 |
-|---|---|
-| `Trend` | CAGR ≥ 10% **且** 期数 ≥ 24 |
-| `Fad` | CAGR < 0 |
-| `Unclear` | 其余 |
+| 判定 | 条件 | 原因文案 |
+|---|---|---|
+| `NoData` | 相对平面无序列 | Google Trends 无序列（长尾词低于其收录阈值） |
+| `Unclear` | 期数 < 24 | 期数不足 |
+| `Fad` | CAGR < 0 | 相对趋势负增长 |
+| `Unclear` | CAGR < 10% | 相对增长未达门槛 |
+| `Unclear` | `keyword_type=identity` | 身份词不是商品搜索词 —— 改用社媒侧指标验证 |
+| `Unclear` | 绝对月搜索量 < 3000 | 小基数高增长 |
+| `Trend` | 以上都不触发 | 相对增长达标且绝对量级通过 |
+| `Unclear` | 绝对平面未取到 | 无法排除小基数高增长 |
+
+**身份词走的是社媒平面，不是搜索平面。** 实测 `pilates girl` 在 Amazon 有 56 个月数据，
+其中 55 个月是 0 —— 它是圈层自称，不是任何人会在 Amazon 里敲的词。这类词的验证
+靠社媒侧指标（视频量/粉丝增速），**不能**因为搜索量为 0 就判它没戏。
 
 季节性指数 = `(月均值的极差 / 全期均值) × 100`，用于区分"指数高是因为季节性波动"还是"结构性增长"。
 
-**Gate**：
+**Gate**（`pipeline.py::g_s2`）：
 - 时间序列 ≥48 行、汇总 ≥3 行
-- 至少 1 个词判为 `Trend`（注意：**全部判 Fad 也是一个有效结论**，此时应直接出报告说明"不该做"，
+- **每个 S1 输入词都要有一行**（含 `NoData` 行）—— 悄悄丢掉下钻出来的长尾词，
+  等于让这一轮调研弄丢自己的发现
+- `NoData` 行必须写明原因，且**不得**被判成 `Trend`
+- 至少 1 个词判 `Trend`（注意：**全部判 Fad 也是有效结论**，此时直接出报告说明"不该做"，
   而不是放宽阈值）
-- 每个词观测期数 ≥24
+- 有相对序列的词里，取到绝对量级的比例 ≥ `s2_min_abs_coverage_pct`（默认 50%）
+- **不允许**低于绝对量级下限却判 `Trend`
+- 有序列的词里达到 24 期的比例 ≥ `s2_min_window_coverage_pct`（默认 50%）
+  —— 是覆盖率而非"每词都要"：这一方法就是要找**新词**，而新词必然没有两年历史
 
-**分析**：`analysis/02_trend_notes.md` —— fetch 会自动写；若某些词取不到数据，
-必须在笔记里列出并说明走了哪一级降级。
+阈值集中在 `config.local.json` 的 `gate_defaults`：`trend_min_cagr_pct`、
+`trend_min_months`、`trend_min_abs_searches`、`s2_min_abs_coverage_pct`、
+`s2_min_window_coverage_pct`。
 
-**已知问题**：SellerSprite `google_trend` 对部分长尾多词短语返回空序列
-（例如 `pilates girl`、`what i eat in a day`）。这类词需要改走
-`sorftime keyword_trend`、WebFetch，或降级到 browser-skill。
+**分析**：`analysis/02_trend_notes.md` —— fetch 自动写，含阈值、每个词的两个平面与判定原因；
+取不到数据的词必须在笔记里列出并说明走了哪一级降级。
+
+**已知问题**：SellerSprite `google_trend` 对长尾词（多词短语、`#hashtag` 形式的圈层词）
+经常返回空序列 —— 例如 `pilatesstrength`、`pilatesxstrength`、`matpilates`。
+这类词在 S2 里被标成 `NoData` 并写明原因，不会消失，但它们的验证要靠社媒侧指标。
 
 ---
 

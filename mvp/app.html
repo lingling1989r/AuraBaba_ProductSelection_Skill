@@ -99,13 +99,71 @@ footer{color:var(--muted);font-size:12px;padding:26px;text-align:center}
   <div id="runLine" style="margin-top:11px;font-size:12.5px"></div>
 </header>
 <div class="tabs">
-  <button id="tab-trend" class="on" onclick="setTab('trend')">趋势获取</button>
+  <button id="tab-drill" class="on" onclick="setTab('drill')">圈层下钻</button>
+  <button id="tab-trend" onclick="setTab('trend')">趋势获取</button>
   <button id="tab-stages" onclick="setTab('stages')">阶段推进与人工判断</button>
 </div>
 
 <main>
+  <!-- ======================= DRILL ======================= -->
+  <section id="pane-drill">
+    <div class="card">
+      <h2>圈层下钻：从种子词开出一圈更细的圈层词</h2>
+      <p class="sub">S1 不是一份凭记忆敲的词表，而是一次<strong>下钻</strong>：用户给一个圈层自称词作入口，
+        机器顺着它开一圈同圈层、更具体的词；再下一级就再走一轮人的筛选。</p>
+      <p class="sub">两个环打到两个数据平面，<strong>不能混</strong>：
+        <span class="mono">social</span> 出的是<strong>身份词</strong>（社区怎么称呼自己），
+        <span class="mono">ecom</span> 出的是<strong>商品词</strong>（人在 Amazon 里敲什么）。
+        实测 <span class="mono">pilates girl</span> 在 Amazon 有 56 个月搜索数据、其中 55 个月是 0。</p>
+      <div class="row">
+        <div style="min-width:190px">
+          <label>下钻环</label>
+          <select id="drillRing" onchange="renderDrillHint()">
+            <option value="social">社媒环 → 身份词</option>
+            <option value="ecom">电商/搜索环 → 商品词</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:240px">
+          <label>父词（被下钻的上一级词）</label>
+          <input id="drillParent" placeholder="pilates girl">
+        </div>
+        <div>
+          <label>市场</label>
+          <select id="drillMarket">
+            <option value="">选择市场…</option>
+            <option>US</option><option>UK</option><option>DE</option><option>JP</option>
+          </select>
+        </div>
+        <div><button class="act" id="drillBtn" onclick="runDrill(this)">下钻一圈</button></div>
+      </div>
+      <div id="drillHint" class="sub" style="margin-top:8px"></div>
+      <div id="drillOut"></div>
+    </div>
+
+    <div class="card">
+      <h2>人的筛选轮：挑哪些词入库</h2>
+      <p class="sub">下钻环<strong>永不自动入库</strong> —— 机器排序的环会漂向泛词（见上面的漂移提醒）。
+        勾选要留下的词，并写清<strong>为什么</strong>：筛选理由是这个阶段唯一的产出，没写就不算走完。</p>
+      <div id="drillPick"></div>
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1;min-width:280px">
+          <label>筛选理由（至少 6 个字；写清丢掉了什么、为什么）</label>
+          <input id="drillNote" placeholder="例：留下 pilatesxstrength 这类缝合词，丢掉 pilates —— 它是头词，红海">
+        </div>
+        <div><button class="act" id="acceptBtn" onclick="acceptDrill(this)">采纳并写入 S1</button></div>
+      </div>
+      <div id="acceptOut"></div>
+    </div>
+
+    <div class="card">
+      <h2>下钻历史</h2>
+      <p class="sub">每一轮的环、父词、采纳结果与理由 —— 逐级可回放。</p>
+      <div id="drillLog"></div>
+    </div>
+  </section>
+
   <!-- ======================= TREND ======================= -->
-  <section id="pane-trend">
+  <section id="pane-trend" style="display:none">
     <div class="card">
       <h2>本次调研</h2>
       <p class="sub">给这一轮选品起个名字 —— <strong>用户填，不替你猜</strong>。
@@ -205,13 +263,13 @@ function pickStage(id){ location.hash = 'stages/' + id; applyHash(); }
 
 function applyHash(){
   const parts = (location.hash||'').replace(/^#/,'').split('/');
-  const tab = parts[0] === 'stages' ? 'stages' : 'trend';
+  const tab = parts[0] === 'stages' ? 'stages' : (parts[0] === 'trend' ? 'trend' : 'drill');
   if(tab==='stages' && parts[1] && S.boot && S.boot.stages.some(s=>s.id===parts[1])) S.stage = parts[1];
   S.tab = tab;
-  $('tab-trend').classList.toggle('on', tab==='trend');
-  $('tab-stages').classList.toggle('on', tab==='stages');
-  $('pane-trend').style.display = tab==='trend' ? '' : 'none';
-  $('pane-stages').style.display = tab==='stages' ? '' : 'none';
+  ['drill','trend','stages'].forEach(t=>{
+    $('tab-'+t).classList.toggle('on', tab===t);
+    $('pane-'+t).style.display = tab===t ? '' : 'none';
+  });
   if(S.boot){ renderStageList(); renderStageDetail(); }
   // deep-linking to #stages/S2 should land on the decision, not on the header
   if(tab==='stages' && parts[1] && !S._scrolled){
@@ -277,6 +335,151 @@ async function saveRunName(btn){
       : `<div class="warnbar" style="margin-top:10px">${esc(r.error)}</div>`;
     if(r.ok) await reload();
   } finally { btn.disabled=false; btn.textContent='保存名称'; }
+}
+
+/* ---------------- drill (S1) ---------------- */
+function renderDrillHint(){
+  const ring = $('drillRing').value;
+  const r = ((S.boot&&S.boot.drill_rings)||[]).find(x=>x.value===ring);
+  $('drillHint').innerHTML = r
+    ? `<span class="mono">${esc(ring)}</span> — ${esc(r.hint)}`
+    : '';
+  const isEcom = ring==='ecom';
+  $('drillParent').placeholder = isEcom ? 'pilates grip socks' : 'pilates girl';
+  // Switching rings switches planes, so an empty parent gets the run's own root
+  // for that plane (identity seed vs product keyword) rather than a stale word
+  // from the other plane.
+  if(!$('drillParent').value){
+    const run = (S.boot&&S.boot.run)||{};
+    if(isEcom && run.product_keyword) $('drillParent').value = run.product_keyword;
+    if(!isEcom && (run.seed_keywords||[]).length) $('drillParent').value = run.seed_keywords[0];
+  }
+}
+
+function renderDrill(r, force){
+  const res = r || (S.boot && S.boot.last_drill) || null;
+  // Restoring the last drill on page load would otherwise leave the form showing
+  // one ring while the table below shows another - sync the form to whatever is
+  // actually on screen.
+  if(force && res && res.ring && $('drillRing').value !== res.ring){
+    $('drillRing').value = res.ring;
+    $('drillParent').value = res.parent || '';
+    renderDrillHint();
+  }
+  if(!res || !res.candidates){ $('drillOut').innerHTML=''; }
+  else {
+    const hit = res.ok
+      ? `<span class="chip ok">命中 ${esc(res.source||'')} · tier=${esc(res.tier)}</span>`
+      : `<span class="chip bad">未命中 —— 一级/二级都取不到</span>`;
+    const note = res.note ? `<div class="sub" style="margin-top:8px">${esc(res.note)}</div>` : '';
+    const drift = res.drift_warning
+      ? `<div class="warnbar" style="margin-top:12px"><strong>漂移提醒：</strong>${esc(res.drift_warning)}</div>` : '';
+    const rows = res.candidates.map((c,i)=>{
+      const mv = typeof c.metric_value==='number' ? c.metric_value.toLocaleString() : '—';
+      const metric = c.metric_name==='searches' ? '绝对搜索量' : '共现频次';
+      return `<tr><td><input type="checkbox" class="pick" data-kw="${esc(c.keyword)}"></td>
+        <td><span class="mono">${esc(c.keyword)}</span></td>
+        <td>${esc(metric)}</td><td>${mv}</td><td>${esc(c.evidence||'')}</td></tr>`;
+    }).join('');
+    const chain = (typeof chainViz==='function') ? chainViz(res.attempts||[], res.attempts&&res.attempts.length
+      ? res.attempts.map(a=>`${a.tier}:${a.source}`) : null) : '';
+    $('drillOut').innerHTML = `
+      <div style="margin-top:14px">${hit}
+        <span class="chip info" style="margin-left:6px">${esc(res.ring_label||res.ring)}</span>
+        <span class="chip info" style="margin-left:6px">父词 ${esc(res.parent)} · ${res.candidates.length} 个候选</span>
+      </div>${note}${drift}
+      <div style="margin-top:12px">${chain}</div>
+      <div class="scroll" style="margin-top:12px"><table><thead><tr>
+        <th>选</th><th>候选词</th><th>指标</th><th>值</th><th>来源</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  renderDrillLog();
+}
+
+function renderDrillLog(){
+  const log = (S.boot && S.boot.drill_log) || [];
+  if(!log.length){ $('drillLog').innerHTML = '<div class="empty">还没有下钻轮次。</div>'; return; }
+  $('drillLog').innerHTML = '<div class="scroll"><table><thead><tr>'+
+    ['时间','环','父词','层级','采纳','理由'].map(h=>`<th>${h}</th>`).join('')+
+    '</tr></thead><tbody>'+log.map(e=>`<tr>
+      <td class="mono">${esc((e.decided_at||'').replace('T',' ').replace('Z',''))}</td>
+      <td class="mono">${esc(e.ring)}</td><td class="mono">${esc(e.parent)}</td>
+      <td>L${esc(e.level)}</td><td class="mono">${esc((e.accepted||[]).join(', '))}</td>
+      <td>${esc(e.note||'')}</td></tr>`).join('')+'</tbody></table></div>';
+}
+
+async function runDrill(btn){
+  const parent = $('drillParent').value.trim();
+  const market = $('drillMarket').value;
+  if(!(S.boot && S.boot.run && S.boot.run.topic)){
+    $('drillOut').innerHTML = '<div class="warnbar">先给这次调研起个名字 —— '
+      + '它是这一轮选品的记录名，之后靠它把记录找回来。</div>';
+    return;
+  }
+  if(!market){
+    $('drillOut').innerHTML = '<div class="warnbar">先选市场 —— 下钻的每个源都按它取数。</div>';
+    $('drillMarket').focus(); return;
+  }
+  if(!parent){
+    $('drillOut').innerHTML = '<div class="warnbar">父词不能为空 —— 下钻是从上一级词开一圈新词。'
+      + '第一轮填你给的种子词。</div>';
+    $('drillParent').focus(); return;
+  }
+  btn.disabled=true; btn.textContent='下钻中…';
+  $('drillOut').innerHTML = '<div class="empty">正在取这一圈…</div>';
+  $('drillPick').innerHTML = ''; $('acceptOut').innerHTML='';
+  try{
+    const r = await api('/api/drill', {ring:$('drillRing').value, parent, market, count:40});
+    renderDrill(r);
+    renderPick(r);
+  } finally { btn.disabled=false; btn.textContent='下钻一圈'; }
+}
+
+function renderPick(r){
+  if(!r.candidates || !r.candidates.length){
+    $('drillPick').innerHTML = '<div class="empty">这一圈没取到候选词 —— 换个父词，或走人工补齐。</div>';
+    return;
+  }
+  $('drillPick').innerHTML = `<div class="sub">当前候选来自 <span class="mono">${esc(r.parent)}</span>
+    的 <span class="mono">${esc(r.ring)}</span> 环。上面勾选后在这里确认。</div>
+    <div class="chips" id="pickChips" style="margin-top:10px"></div>`;
+  const sync = ()=>{
+    const picked = [...document.querySelectorAll('#drillOut .pick:checked')].map(x=>x.dataset.kw);
+    $('pickChips').innerHTML = picked.length
+      ? picked.map(k=>`<span class="chip ok">${esc(k)}</span>`).join('')
+      : '<span class="chip info">还没选词</span>';
+  };
+  document.querySelectorAll('#drillOut .pick').forEach(c=>c.addEventListener('change', sync));
+  sync();
+}
+
+async function acceptDrill(btn){
+  const ring = $('drillRing').value;
+  const parent = $('drillParent').value.trim();
+  const market = $('drillMarket').value;
+  const note = $('drillNote').value.trim();
+  const words = [...document.querySelectorAll('#drillOut .pick:checked')].map(x=>x.dataset.kw);
+  if(!words.length){
+    $('acceptOut').innerHTML = '<div class="warnbar">一个词都没勾 —— 至少选一个，或换个父词重钻。</div>';
+    return;
+  }
+  if(note.length < 6){
+    $('acceptOut').innerHTML = '<div class="warnbar">必须写清为什么留下这些（至少 6 个字）—— '
+      + '下钻环不自动入库，筛选理由是这个阶段唯一的产出。</div>';
+    $('drillNote').focus(); return;
+  }
+  btn.disabled=true; btn.textContent='写入中…';
+  try{
+    const r = await api('/api/drill/accept',
+      {ring, parent, market, note, words, type: ring==='social' ? 'identity' : 'product'});
+    $('acceptOut').innerHTML = r.ok
+      ? `<div class="chip ok" style="margin-top:10px">已采纳 ${(r.added||[]).length} 个词，写入 level=${esc(r.level)}`
+        + `（父词 ${esc(r.parent)} 在 level=${esc(r.parent_level)}）</div>`
+        + ((r.skipped_existing||[]).length
+            ? `<div class="sub">跳过已存在：${esc(r.skipped_existing.join(', '))}</div>` : '')
+      : `<div class="warnbar" style="margin-top:10px">${esc(r.error)}</div>`;
+    if(r.ok){ $('drillNote').value=''; await reload(); renderDrill(null); renderPick(S.boot.last_drill||{}); }
+  } finally { btn.disabled=false; btn.textContent='采纳并写入 S1'; }
 }
 
 /* ---------------- trend ---------------- */
@@ -543,7 +746,14 @@ async function reload(){
   if(!S.sources && S.boot.sources && Object.keys(S.boot.sources.sources||{}).length) S.sources = S.boot.sources;
   renderSources(); renderRunLine(); renderStageList(); renderStageDetail(); renderDecisionLog();
   if(S.boot.run && S.boot.run.topic && !$('topicInput').value) $('topicInput').value = S.boot.run.topic;
+  // The run already recorded a market - default the drill form to it instead of
+  // making the operator re-pick the same value every reload (an empty select
+  // silently blocks the drill with "先选市场").
+  if(S.boot.run && S.boot.run.market && !$('drillMarket').value)
+    $('drillMarket').value = S.boot.run.market;
+  renderDrillHint();
   if(S.boot.last_trend && !S.trend){ S.trend = S.boot.last_trend; renderTrend(S.boot.last_trend); }
+  if(S.boot.last_drill){ renderDrill(S.boot.last_drill, true); renderPick(S.boot.last_drill); }
   $('chainLabel').textContent = (S.boot.fallback_chain||[]).join(' → ');
   applyHash();
 }

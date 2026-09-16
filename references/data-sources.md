@@ -42,6 +42,15 @@ python3 scripts/mcp_call.py list  --source sellersprite # 列出工具
 - 常用端点：`/api/v1/tiktok/web/fetch_general_search`、`/api/v1/tiktok/web/fetch_search_video`、
   `/api/v1/instagram/web/...`、`/api/v1/youtube/web/...`。
   完整列表见 `https://api.tikhub.io/#/`（OpenAPI 文档）。
+- **没有"相关身份词"这类现成 API。** 圈层词环只能从内容里抽：`drill.py --ring social`
+  搜父词，然后收视频实际带的 `challenges[].title`，**加上**正文 `desc` 里内联的 `#tag`
+  （TikTok 上两者并不一致，`🫶🏼 #workoutsplit #pilatesstrength` 这种只出现在正文里）。
+  实测下钻 `pilates girl` 得到 `pilatesworkout`、`hotpilates`、`pilatesgirls`、
+  `pilatesstrength`、`pilatesprincess`、`pilatesaesthetic`、`pilatesootd`、`workoutsplit` 等 ——
+  这些才是圈层自称。
+- **要滤掉两类噪声标签**：拉量标签（`fyp` / `viral` / `foryoupage`）和平台自动打的
+  内容无关标签。后者容易被忽略：实测 `pilates girl` 的共现第 6 名是 `original sound`。
+  `drill.py::STOP_TAGS` 维护这份清单。
 
 ### 卖家精灵 SellerSprite —— Amazon
 
@@ -50,13 +59,17 @@ python3 scripts/mcp_call.py list  --source sellersprite # 列出工具
 | MCP | `https://mcp.sellersprite.com/mcp?secret-key=<key>`（密钥在 query string） |
 | 工具数 | 45 |
 
-**必知的两个坑**：
+**必知的坑**（全部实测）：
 
-1. **所有工具的入参都包一层 `request` 对象**：
-   ```json
-   {"request": {"marketplace": "US", "keyword": "pilates grip socks"}}
-   ```
-   直接传平铺参数会报参数错误。
+1. **入参是否包 `request` 并不统一，同一个源里两种都有**：
+
+   | 工具 | 入参形态 |
+   |---|---|
+   | `google_trend`、`keyword_miner`、`market_research`、`product_research` | `{"request": {...}}` |
+   | `keyword_research_trends` | **平铺**：`{"keyword": "...", "marketplace": "US", "historyDate": "202608"}` |
+
+   给 `keyword_research_trends` 包一层 `request` 会得到
+   `keyword is required`（19 字节的纯文本，不是 JSON）。
 2. **`market_research` 的 `departmentKeyword` 是模糊匹配，且命中失败时静默返回 0 行**
    （HTTP 200、`"total": 0`）。实测：
    - `Sports & Outdoors` ✅、`Clothing, Shoes & Jewelry` ✅、`yoga` ✅、`pilates` ✅、`socks` ✅
@@ -64,12 +77,25 @@ python3 scripts/mcp_call.py list  --source sellersprite # 列出工具
 
    `pipeline.py::fetch_s5` 因此按 `category → product_keyword → 各单词` 的顺序探测，
    并把每次探测结果写进 `raw/`，最后一个成功的写入 `raw/05_market_research.json`。
+3. **`keyword_miner` 不认 `historyDate`，而且 `size` 默认只有 5。**
+   传 `historyDate` 会得到 HTTP 200 + `{"code":"OK", ..., "total":0, "items":[]}` ——
+   和"这个词确实没有相关词"长得一模一样，但参数本身是错的。要用 `size` 显式放大：
+   ```json
+   {"request": {"marketplace": "US", "keyword": "pilates grip socks", "size": 30}}
+   ```
+   默认 5 会把相关词环截断成 5 个头词 —— 正是漂移陷阱的缩小版。
+4. **`keyword_research_trends` 的响应用 `data` 直接装一个 list**（不是 `{"items": []}`），
+   字段名拼错成 **`keywrod`**，`time` 是 `"2026年08月"` 这种中文格式，
+   增长率是**小数**（`0.3881` = +38.81%）不是百分数。
+   这些都在 `pipeline.py::fetch_abs_series` / `_cn_month` 里处理。
 
 **常用工具**：
 
 | 工具 | 用途 |
 |---|---|
-| `google_trend` | Google Trends 月度数（S2 趋势验证） |
+| `google_trend` | Google Trends 月度数（S2 相对平面） |
+| `keyword_research_trends` | Amazon 月**绝对**搜索量 + 同比/环比/三月增长（S2 绝对平面） |
+| `keyword_miner` | 一个词的相关词环（S1 电商下钻） |
 | `market_research` | 类目级市场规模 / 集中度 / 新品占比（S5） |
 | `keyword_research` | 关键词市场的搜索量、购买率、供需比、PPC 竞价 |
 | `aba_research_weekly` / `_monthly` | ABA 热门/异动/增长/潜力关键词 |

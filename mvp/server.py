@@ -33,6 +33,7 @@ SKILL_ROOT = HERE.parent
 SCRIPTS = SKILL_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import drill as dl  # noqa: E402
 import mcp_call as mc  # noqa: E402
 import pipeline as pl  # noqa: E402
 
@@ -40,6 +41,8 @@ RUN_DIR = HERE / "run"
 DECISIONS_PATH = RUN_DIR / "decisions.json"
 CACHE_PATH = RUN_DIR / "trend_cache.json"
 LAST_TREND_PATH = RUN_DIR / "last_trend.json"
+LAST_DRILL_PATH = RUN_DIR / "last_drill.json"
+DRILL_LOG_PATH = RUN_DIR / "drill_log.json"
 SOURCES_PATH = RUN_DIR / "sources.json"
 META_PATH = RUN_DIR / "meta.json"
 
@@ -138,7 +141,22 @@ def load_cache() -> dict:
 
 
 def load_meta() -> dict:
-    return _load(META_PATH, {})
+    """UI meta (topic/named_at) merged with the run's chain roots.
+
+    The panel needs the run's market and both chain roots (identity seed +
+    product keyword) to prefill its forms; those live in the pipeline run's
+    state.json, not in meta.json, so they are read from there rather than
+    duplicated.
+    """
+    meta = _load(META_PATH, {})
+    try:
+        st = pl.Run(RUN_DIR).read()
+    except Exception:
+        return meta
+    for key in ("market", "seed_keywords", "product_keyword"):
+        if st.get(key) not in (None, "", []):
+            meta.setdefault(key, st[key])
+    return meta
 
 
 def run_topic() -> str:
@@ -150,7 +168,10 @@ def set_run_topic(topic: str) -> dict:
     if len(topic) < 2:
         return {"ok": False,
                 "error": "调研名称不能为空 —— 它是这一轮选品的记录名，之后靠它把记录找回来"}
-    meta = load_meta()
+    # Written from the file, not from load_meta(): the merged view carries the
+    # run's market/roots, and persisting that copy would freeze them here and
+    # shadow every later change in state.json.
+    meta = _load(META_PATH, {})
     meta["topic"] = topic
     meta["named_at"] = now()
     _save(META_PATH, meta)
@@ -427,10 +448,120 @@ def bootstrap() -> dict:
         "sources": _load(SOURCES_PATH, {}),
         "cache": load_cache(),
         "last_trend": _load(LAST_TREND_PATH, None),
+        "last_drill": _load(LAST_DRILL_PATH, None),
+        "drill_log": _load(DRILL_LOG_PATH, []),
+        "drill_rings": [{"value": "social", "label": "社媒环 → 身份词",
+                         "hint": "tikhub 搜父词，收视频带的 hashtag + 正文 #tag 的共现环"},
+                        {"value": "ecom", "label": "电商/搜索环 → 商品词",
+                         "hint": "SellerSprite keyword_miner 的相关词环，带绝对搜索量"}],
         "gate_defaults": cfg.get("gate_defaults") or {},
         "fallback_chain": cfg.get("fallback_chain") or ["mcp", "apify", "web", "browser"],
         "generated_at": now(),
     }
+
+
+# ----------------------------------------------------------------------- drill
+# S1 is a drill, not a keyword box. A seed word opens a ring of hotter words from
+# the same community; each further ring needs a human pass. The machine half:
+# fetch the ring and show it. The human half: pick which words survive, and say
+# why - because a volume-ranked ring walks straight into head terms (measured:
+# drilling `pilates grip socks` puts `yoga mat` 1.13M and `halloween` 781k above
+# the real sibling `pilates socks` at 425k).
+DRIFT_NOTE = {
+    "social": "共现频次最高的往往是头词（下钻 pilates girl 时 pilates 排第一，"
+              "且每下一级它都会回到第一）—— 高共现 ≠ 该采纳。",
+    "ecom": "按绝对搜索量排会撞上头部/无关词（yoga mat 1,129,657、halloween 781,484 "
+            "都排在真正的兄弟词 pilates socks 425,318 前面）—— 高搜索量 ≠ 该采纳。",
+}
+
+
+def ensure_run(market: str, topic: str) -> "pl.Run":
+    """drill.py writes into a real pipeline run, so the MVP keeps one too."""
+    if not (RUN_DIR / pl.RUN_MARKER).is_file():
+        return pl.Run.create(RUN_DIR, topic or "mvp 调研", market, [])
+    r = pl.Run(RUN_DIR)
+    st = r.read()
+    changed = False
+    for key, val in (("market", market), ("topic", topic)):
+        if val and st.get(key) != val:
+            st[key] = val
+            changed = True
+    if changed:
+        r.save(st)
+    return r
+
+
+def run_drill(ring: str, parent: str, market: str, topic: str, count: int) -> dict:
+    r = ensure_run(market, topic)
+    # A drill whose parent is nowhere in the chain yet is the first ring, so that
+    # parent *is* the operator's entrance. The two rings have two different
+    # entrances and they live in two different state fields - an identity word is
+    # not a product word, and collapsing them would type a real product keyword
+    # as an identity word (which S2 then answers with "verify it on the social
+    # plane", the wrong plane). The CLI gets these from `init --seed` /
+    # `--product-keyword`; the panel has no init step, so they are inferred here.
+    if parent.strip().lower() not in dl.keyword_levels(r):
+        st = r.read()
+        field = "seed_keywords" if ring == "social" else "product_keyword"
+        if ring == "social":
+            have = [str(s) for s in (st.get(field) or [])]
+            if parent.strip().lower() not in {s.strip().lower() for s in have}:
+                st[field] = have + [parent.strip()]
+                r.save(st)
+        elif not str(st.get(field) or "").strip():
+            st[field] = parent.strip()
+            r.save(st)
+    res = (dl.drill_social(parent, market, r, count) if ring == "social"
+           else dl.drill_ecom(parent, market, r, count))
+    res["drift_warning"] = DRIFT_NOTE.get(ring, "")
+    res["ring_label"] = "社媒环（身份词）" if ring == "social" else "电商/搜索环（商品词）"
+    res["run_topic"] = topic
+    _save(LAST_DRILL_PATH, res)
+    return res
+
+
+def accept_drill(payload: dict) -> dict:
+    """Record the human filter round, then append the survivors to S1."""
+    ring = payload.get("ring")
+    parent = (payload.get("parent") or "").strip()
+    market = (payload.get("market") or "").strip().upper()
+    topic = run_topic()
+    note = (payload.get("note") or "").strip()
+    words = [w.strip() for w in (payload.get("words") or []) if w and w.strip()]
+    ktype = payload.get("type") or "identity"
+
+    if not parent or ring not in ("social", "ecom"):
+        return {"ok": False, "error": "ring 和 parent 都是必需的"}
+    if not market:
+        return {"ok": False, "error": "市场不能为空"}
+    if not words:
+        return {"ok": False, "error": "没有选任何词 —— 至少勾一个，或换个父词重钻"}
+    # The ring is never auto-adopted, and the reason is the whole point of the
+    # human round: it is what makes the next reader able to re-judge the cut.
+    if len(note) < 6:
+        return {"ok": False,
+                "error": "必须写清为什么留下这些（至少 6 个字）—— 下钻环不自动入库，"
+                         "筛选理由是这个阶段唯一的产出"}
+
+    last = _load(LAST_DRILL_PATH, {}) or {}
+    metrics = {str(c.get("keyword", "")).lower(): c
+               for c in (last.get("candidates") or [])}
+    r = ensure_run(market, topic)
+    res = dl.accept(r, parent, words, ring, ktype, market,
+                    last.get("source") or "", last.get("tier") or "web", metrics)
+
+    log = _load(DRILL_LOG_PATH, []) or []
+    log.append({"ring": ring, "parent": parent, "market": market, "type": ktype,
+                "accepted": res.get("added"), "skipped_existing": res.get("skipped_existing"),
+                "level": res.get("level"), "note": note, "decided_at": now()})
+    _save(DRILL_LOG_PATH, log)
+    decisions = load_decisions()
+    decisions["S1"] = {"action": "drill_filter", "target": f"{ring}:{parent}",
+                       "payload": res.get("added"), "note": note,
+                       "decided_at": now(),
+                       "revision": (decisions.get("S1") or {}).get("revision", 0) + 1}
+    _save(DECISIONS_PATH, decisions)
+    return {"ok": True, **res, "note": note, "ring": ring, "parent": parent}
 
 
 def record_decision(payload: dict) -> dict:
@@ -527,6 +658,29 @@ class Handler(BaseHTTPRequestHandler):
                 if not market:
                     return self._send({"ok": False, "error": "市场不能为空"}, 400)
                 r = parse_manual(body.get("keyword") or "", body.get("raw") or "", market)
+                return self._send(r, 200 if r.get("ok") else 400)
+            if path == "/api/drill":
+                ring = (body.get("ring") or "social").strip()
+                parent = (body.get("parent") or "").strip()
+                market = (body.get("market") or "").strip().upper()
+                if ring not in ("social", "ecom"):
+                    return self._send({"ok": False, "error": "ring 只能是 social / ecom"}, 400)
+                if not run_topic():
+                    return self._send(
+                        {"ok": False,
+                         "error": "先给这次调研起个名字 —— 它是这一轮选品的记录名，"
+                                  "之后靠它把记录找回来"}, 400)
+                if not market:
+                    return self._send(
+                        {"ok": False, "error": "市场不能为空 —— 下钻的每个源都按它取数"}, 400)
+                if not parent:
+                    return self._send(
+                        {"ok": False, "error": "父词不能为空 —— 下钻是从上一级词开一圈新词"}, 400)
+                count = int(body.get("count") or 30)
+                return self._send({"ok": True, **run_drill(ring, parent, market,
+                                                           run_topic(), count)})
+            if path == "/api/drill/accept":
+                r = accept_drill(body)
                 return self._send(r, 200 if r.get("ok") else 400)
             if path == "/api/decision":
                 r = record_decision(body)
