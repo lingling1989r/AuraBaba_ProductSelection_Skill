@@ -124,7 +124,8 @@ footer{color:var(--muted);font-size:12px;padding:26px;text-align:center}
         </div>
         <div>
           <label>市场</label>
-          <select id="marketSel">
+          <select id="marketSel" required>
+            <option value="">选择市场…</option>
             <option>US</option><option>UK</option><option>DE</option><option>JP</option>
           </select>
         </div>
@@ -239,7 +240,16 @@ async function probeSources(btn){
 /* ---------------- trend ---------------- */
 async function fetchTrend(btn){
   const kws = $('kwInput').value.split(/[,\n]/).map(s=>s.trim()).filter(Boolean);
-  if(!kws.length){ $('trendOut').innerHTML = '<div class="warnbar">先填关键词。</div>'; return; }
+  if(!kws.length){
+    $('trendOut').innerHTML = '<div class="warnbar">先填关键词 —— 给圈层身份词（如 that girl），不要给商品词。</div>';
+    return;
+  }
+  if(!$('marketSel').value){
+    $('trendOut').innerHTML = '<div class="warnbar">先选市场 —— 下游每个源都按它取数，'
+      + '用默认值猜错会让整条链的数据都不对。</div>';
+    $('marketSel').focus();
+    return;
+  }
   btn.disabled=true; btn.textContent='获取中…（逐个走降级链）';
   $('trendOut').innerHTML = '<div class="empty">正在按序尝试一级源…</div>';
   try{

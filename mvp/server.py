@@ -479,11 +479,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"ok": True, **probe_sources()})
             if path == "/api/trend/fetch":
                 kws = [k.strip() for k in (body.get("keywords") or []) if k and k.strip()]
+                market = (body.get("market") or "").strip().upper()
                 if not kws:
-                    return self._send({"ok": False, "error": "keywords is empty"}, 400)
-                return self._send({"ok": True, **fetch_trend(kws, body.get("market") or "US")})
+                    return self._send(
+                        {"ok": False, "error": "关键词不能为空 —— 给身份热词，不要商品词"}, 400)
+                if not market:
+                    return self._send(
+                        {"ok": False,
+                         "error": "市场不能为空 —— 下游每个源都按它取数，"
+                                  "用默认值猜错会让整条链的数据都不对"}, 400)
+                return self._send({"ok": True, **fetch_trend(kws, market)})
             if path == "/api/trend/manual":
-                r = parse_manual(body.get("keyword") or "", body.get("raw") or "", body.get("market") or "US")
+                market = (body.get("market") or "").strip().upper()
+                if not market:
+                    return self._send({"ok": False, "error": "市场不能为空"}, 400)
+                r = parse_manual(body.get("keyword") or "", body.get("raw") or "", market)
                 return self._send(r, 200 if r.get("ok") else 400)
             if path == "/api/decision":
                 r = record_decision(body)

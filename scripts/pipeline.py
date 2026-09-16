@@ -738,11 +738,14 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("init")
-    p.add_argument("--topic", required=True)
-    p.add_argument("--market", default="US")
+    p.add_argument("--topic", required=True,
+                   help="人群圈层描述。只作为报告标题与 S0 计划里的说明，不参与取数")
+    p.add_argument("--market", default=None,
+                   help="目标市场（US / UK / DE / JP ...）。必填：下游所有取数都按它取")
     p.add_argument("--category", default="", help="Amazon category path used for market_research departmentKeyword")
     p.add_argument("--product-keyword", default="", help="product keyword used for product_research competitor sample")
-    p.add_argument("--seed", action="append", default=[])
+    p.add_argument("--seed", action="append", default=[],
+                   help="身份热词种子，可重复。必填至少 1 个：它是圈层入口，不是候选答案")
 
     p = sub.add_parser("status")
     p.add_argument("--json", action="store_true")
@@ -758,10 +761,28 @@ def main() -> int:
     run_dir = Path(args.run_dir).resolve()
 
     if args.cmd == "init":
-        Run.create(run_dir, args.topic, args.market, args.seed,
+        missing = []
+        market = (args.market or "").strip().upper()
+        if not market:
+            missing.append(("--market", "面向的市场",
+                            "US / UK / DE / JP …（站点代码）"))
+        if not args.seed:
+            missing.append(("--seed", "身份热词种子（≥1 个）",
+                            '2–3 个已知的圈层身份词，例如 --seed "that girl"；不要给商品词'))
+        if missing:
+            print("init 缺少必需输入 —— 先向用户问齐，不要替他猜：", file=sys.stderr)
+            for flag, what, hint in missing:
+                print(f"  {flag:10} {what}", file=sys.stderr)
+                print(f"             例：{hint}", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("市场决定所有下游取数（SellerSprite / Sorftime / tikhub 都按它查），", file=sys.stderr)
+            print("种子决定整个选品的入口圈层。这两个用默认值猜错，后面每一步都是错的。", file=sys.stderr)
+            return 2
+
+        Run.create(run_dir, args.topic, market, args.seed,
                    category=args.category, product_keyword=args.product_keyword)
         print(f"initialised pipeline at {run_dir}")
-        print(f"topic={args.topic!r} market={args.market} category={args.category!r} seeds={args.seed}")
+        print(f"topic={args.topic!r} market={market} category={args.category!r} seeds={args.seed}")
         return 0
 
     run = Run.load(run_dir)

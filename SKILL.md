@@ -62,6 +62,24 @@ MCP(一级) → Apify(二级) → WebFetch/WebSearch(三级) → 浏览器操作
 细节与踩坑记录见 [references/data-sources.md](references/data-sources.md) 和
 [references/fallback-chain.md](references/fallback-chain.md)。
 
+## 先问齐输入，再动手
+
+跑之前必须有这三样，**缺哪样就问用户要哪样，不要用默认值替他猜**：
+
+| 输入 | 谁给 | 为什么不能猜 |
+|---|---|---|
+| **市场**（US / UK / DE / JP …） | 用户 | 下游每一次取数都按它查（SellerSprite `marketplace`、Sorftime `keyword_support_site`、tikhub 站点）。猜错＝整条链的数据都不对，而且看不出来 |
+| **种子词**（≥1 个身份词） | 用户 | 它是**圈层入口，不是候选答案**。选错入口＝选品从第一步就偏了 |
+| **人群/主题**（`--topic`） | 用户 | 只进报告标题与 S0 计划，**不参与取数** —— 它是给人看的，别指望它影响结果 |
+
+用户只说「帮我选品」但没给市场和种子，就先问：
+
+> 要做哪个市场（US / UK / DE / JP…）？另外给我 2–3 个你已知的**圈层身份词**做种子
+> （例如 `that girl`、`pilates girl`）—— 不要给商品词，商品词是后面才出现的东西。
+
+`init` 会对缺项直接报错退出（exit 2），不会带着空种子往下跑。种子进了 `state.json` 之后，
+S1 再往 `data/01_seed_keywords.csv` 里补新发现的身份词，S2 取的是**两者并集**。
+
 ## 快速开始
 
 ```bash
@@ -127,7 +145,6 @@ python3 $SK/scripts/pipeline.py --run-dir ./selection_run finalize
 
 ## 敏感信息
 
-`config.local.json` 存放三个数据源的 endpoint 与密钥，已在 `.gitignore` 中排除 ——
-仓库里只有 `config.local.example.json` 模板，首次使用先 `cp` 一份再填自己的 key。
+`config.local.json` 存放三个数据源的 endpoint 与密钥。
 **不要把里面的密钥复制到 SKILL.md、报告、issue 评论或任何会被转发的地方。**
-轮换密钥时只改这一个文件。也可以用环境变量 `SKS_CONFIG` 指向另一份配置。
+轮换密钥时只改这一个文件。
